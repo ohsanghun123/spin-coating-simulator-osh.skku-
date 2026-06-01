@@ -5,7 +5,7 @@ import { runRK4Simulation } from './simulationEngine';
 export default function SpinCoatingSimulator() {
     const [rpm, setRpm] = useState(3000);
     const [h0, setH0] = useState(20);
-    const [eta0, setEta0] = useState(0.02);
+    const [eta0, setEta0] = useState(0.02); // 💡 추가된 초기 점도 상태
     const [evapRate, setEvapRate] = useState(0.5);
     const [useRaoult, setUseRaoult] = useState(false);
     
@@ -16,6 +16,7 @@ export default function SpinCoatingSimulator() {
     const [metrics, setMetrics] = useState({ finalH: 0, gelTime: 0, minH: 0 });
 
     useEffect(() => {
+        // 💡 렌더링 시 eta0 변수가 엔진으로 함께 전달됨
         const res = runRK4Simulation(rpm, h0, eta0, evapRate, useRaoult);
         setPlotData(res);
         
@@ -144,6 +145,15 @@ export default function SpinCoatingSimulator() {
                             <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{rpm} RPM</span>
                         </div>
                         <input type="range" min="1000" max="5000" step="500" value={rpm} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setRpm(Number(e.target.value))} />
+                    </div>
+
+                    {/* 💡 새로 추가된 초기 점도 (Initial Viscosity) 제어 슬라이더 구역 */}
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Initial Viscosity</label>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{eta0.toFixed(2)} Pa·s</span>
+                        </div>
+                        <input type="range" min="0.01" max="0.10" step="0.01" value={eta0} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEta0(Number(e.target.value))} />
                     </div>
 
                     <div>
