@@ -152,9 +152,9 @@ export default function SpinCoatingSimulator() {
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                             <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Initial Viscosity</label>
-                            <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{eta0.toFixed(2)} Pa·s</span>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{eta0.toFixed(3)} Pa·s</span>
                         </div>
-                        <input type="range" min="0.01" max="0.10" step="0.01" value={eta0} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEta0(Number(e.target.value))} />
+                        <input type="range" min="0.005" max="0.10" step="0.005" value={eta0} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEta0(Number(e.target.value))} />
                     </div>
 
                     <div>
