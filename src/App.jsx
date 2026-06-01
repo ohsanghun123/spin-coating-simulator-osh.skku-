@@ -8,7 +8,8 @@ export default function SpinCoatingSimulator() {
     const [eta0, setEta0] = useState(0.02); // 💡 추가된 초기 점도 상태
     const [evapRate, setEvapRate] = useState(0.5);
     const [useRaoult, setUseRaoult] = useState(false);
-    
+    const [edgeSuppress, setEdgeSuppress] = useState(0.5); // 💡 [추가 ①] 엣지 용매증기 억제 (0=무제어, 1=완전제어)
+
     // 탭 UI 상태 관리
     const [viewMode, setViewMode] = useState('temporal'); 
     
@@ -16,8 +17,8 @@ export default function SpinCoatingSimulator() {
     const [metrics, setMetrics] = useState({ finalH: 0, gelTime: 0, minH: 0 });
 
     useEffect(() => {
-        // 💡 렌더링 시 eta0 변수가 엔진으로 함께 전달됨
-        const res = runRK4Simulation(rpm, h0, eta0, evapRate, useRaoult);
+        // 💡 [추가 ②] edgeSuppress를 6번째 인자로 전달
+        const res = runRK4Simulation(rpm, h0, eta0, evapRate, useRaoult, edgeSuppress);
         setPlotData(res);
         
         if (res.timeData.length > 0) {
@@ -27,11 +28,11 @@ export default function SpinCoatingSimulator() {
             
             setMetrics({
                 finalH: finalState.thickness_RK4.toFixed(2),
-                gelTime: gelPoint ? gelPoint.time.toFixed(2) : `> ${useRaoult ? '100.0' : '30.0'}`,
+                gelTime: gelPoint ? gelPoint.time.toFixed(2) : `> ${useRaoult ? '200.0' : '300.0'}`,
                 minH: h_poly.toFixed(2)
             });
         }
-    }, [rpm, h0, eta0, evapRate, useRaoult]);
+    }, [rpm, h0, eta0, evapRate, useRaoult, edgeSuppress]); // 💡 [추가 ③] 의존성 배열에 edgeSuppress 포함
 
     const colors = {
         bg: '#f8fafc', card: '#ffffff', textMain: '#0f172a', textSub: '#64748b',
@@ -127,7 +128,7 @@ export default function SpinCoatingSimulator() {
                                         <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}` }} />
                                         <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
                                         
-                                        <Area type="monotone" dataKey="thickness" name="Final Film Profile (Edge Bead)" stroke={colors.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorThickness)" />
+                                        <Area type="monotone" dataKey="thickness" name="Final Film Profile (Radial)" stroke={colors.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorThickness)" />
                                     </AreaChart>
                                 )}
                             </ResponsiveContainer>
@@ -162,6 +163,18 @@ export default function SpinCoatingSimulator() {
                             <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{evapRate.toFixed(1)} μm/s</span>
                         </div>
                         <input type="range" min="0.0" max="2.0" step="0.1" value={evapRate} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEvapRate(Number(e.target.value))} />
+                    </div>
+
+                    {/* 💡 [추가 ④] 엣지 용매증기 억제 (Edge-Vapor Suppression) 제어 슬라이더 */}
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Edge-Vapor Suppression</label>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{(edgeSuppress * 100).toFixed(0)} %</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={edgeSuppress} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEdgeSuppress(Number(e.target.value))} />
+                        <div style={{ fontSize: '11px', color: colors.textSub, marginTop: '6px', lineHeight: '1.4' }}>
+                            Localized solvent-exhaust control. 0% = uncontrolled radial gradient, 100% = uniform evaporation front.
+                        </div>
                     </div>
 
                     <hr style={{ border: 0, borderTop: `1px solid ${colors.border}`, margin: '8px 0' }} />
