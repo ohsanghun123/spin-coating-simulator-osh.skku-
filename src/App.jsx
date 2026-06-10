@@ -11,21 +11,22 @@ export default function SpinCoatingSimulator() {
     const [edgeSuppress, setEdgeSuppress] = useState(0.5); // 💡 [추가 ①] 엣지 용매증기 억제 (0=무제어, 1=완전제어)
 
     // 탭 UI 상태 관리
-    const [viewMode, setViewMode] = useState('temporal'); 
-    
+    const [viewMode, setViewMode] = useState('temporal');
+
+    const [sweepData, setSweepData] = useState([]); // 💡 [NEW] Spin Curve(hf vs ω) 데이터
     const [plotData, setPlotData] = useState({ timeData: [], spatialData: [], uniformity: 0 });
     const [metrics, setMetrics] = useState({ finalH: 0, gelTime: 0, minH: 0 });
 
     useEffect(() => {
-        // 💡 [추가 ②] edgeSuppress를 6번째 인자로 전달
+        // 💡 [추가 ②] edgeSuppress를 6번째 인자로 전달 (gelMode는 기본 'threshold')
         const res = runRK4Simulation(rpm, h0, eta0, evapRate, useRaoult, edgeSuppress);
         setPlotData(res);
-        
+
         if (res.timeData.length > 0) {
-            const h_poly = h0 * 0.20; 
+            const h_poly = h0 * 0.20;
             const finalState = res.timeData[res.timeData.length - 1];
             const gelPoint = res.timeData.find(d => d.viscosity >= 9.99 || (useRaoult && d.thickness_RK4 <= h_poly + 0.01));
-            
+
             setMetrics({
                 finalH: finalState.thickness_RK4.toFixed(2),
                 gelTime: gelPoint ? gelPoint.time.toFixed(2) : `> ${useRaoult ? '200.0' : '300.0'}`,
@@ -33,6 +34,28 @@ export default function SpinCoatingSimulator() {
             });
         }
     }, [rpm, h0, eta0, evapRate, useRaoult, edgeSuppress]); // 💡 [추가 ③] 의존성 배열에 edgeSuppress 포함
+
+    // 💡 [NEW] Spin-curve sweep: 두 freezing 기준 + 해석 ω^(-2/3) 기준선 (Spin Curve 탭에서만 계산)
+    useEffect(() => {
+        if (viewMode !== 'spincurve') return;
+        const rpms = [1000, 2000, 3000, 4000, 5000];
+        const rows = rpms.map(r => {
+            // 검증용 스윕은 무제어(edge off) + 상수 E(Raoult off)로 중심 두께만 비교
+            const thr = runRK4Simulation(r, h0, eta0, evapRate, false, 0, 'threshold');
+            const bal = runRK4Simulation(r, h0, eta0, evapRate, false, 0, 'balance');
+            return {
+                rpm: r,
+                hfThreshold: thr.spatialData[0].thickness, // 중심(r=0) 두께 [µm]
+                hfBalance: bal.spatialData[0].thickness
+            };
+        });
+        // 해석 점근선 hf ∝ ω^(-2/3) 을 3000 RPM의 balance 값에 앵커
+        const anchor = (rows.find(x => x.rpm === 3000) || rows[0]).hfBalance;
+        rows.forEach(x => {
+            x.hfAnalytic = parseFloat((anchor * Math.pow(x.rpm / 3000, -2 / 3)).toFixed(3));
+        });
+        setSweepData(rows);
+    }, [viewMode, h0, eta0, evapRate]);
 
     const colors = {
         bg: '#f8fafc', card: '#ffffff', textMain: '#0f172a', textSub: '#64748b',
@@ -55,7 +78,7 @@ export default function SpinCoatingSimulator() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '2.8fr 1fr', gap: '24px', alignItems: 'start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    
+
                     {/* 상단 4개 Metrics 패널 */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
                         <div style={{ backgroundColor: colors.card, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.border}` }}>
@@ -97,6 +120,9 @@ export default function SpinCoatingSimulator() {
                             <button onClick={() => setViewMode('spatial')} style={{ padding: '8px 16px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', border: 'none', background: 'transparent', color: viewMode === 'spatial' ? colors.primary : colors.textSub, borderBottom: viewMode === 'spatial' ? `3px solid ${colors.primary}` : 'none' }}>
                                 📏 Spatial Distribution (h vs r)
                             </button>
+                            <button onClick={() => setViewMode('spincurve')} style={{ padding: '8px 16px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', border: 'none', background: 'transparent', color: viewMode === 'spincurve' ? colors.primary : colors.textSub, borderBottom: viewMode === 'spincurve' ? `3px solid ${colors.primary}` : 'none' }}>
+                                📈 Spin Curve (hf vs ω)
+                            </button>
                         </div>
 
                         <div style={{ width: '100%', height: '420px' }}>
@@ -109,12 +135,12 @@ export default function SpinCoatingSimulator() {
                                         <YAxis yAxisId="right" orientation="right" stroke={colors.textSub} fontSize={12} tickLine={false} />
                                         <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}` }} />
                                         <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                        
+
                                         <Line yAxisId="left" type="monotone" dataKey="thickness_RK4" name="Center Thickness" stroke={colors.primary} strokeWidth={3} dot={false} />
                                         <Line yAxisId="left" type="monotone" dataKey="thickness_EBP" name="EBP Limit" stroke={colors.accent} strokeWidth={2} strokeDasharray="6 6" dot={false} />
                                         <Line yAxisId="right" type="monotone" dataKey="viscosity" name="Viscosity" stroke={colors.secondary} strokeWidth={2} dot={false} />
                                     </LineChart>
-                                ) : (
+                                ) : viewMode === 'spatial' ? (
                                     <AreaChart data={plotData.spatialData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
                                         <defs>
                                             <linearGradient id="colorThickness" x1="0" y1="0" x2="0" y2="1">
@@ -127,19 +153,39 @@ export default function SpinCoatingSimulator() {
                                         <YAxis domain={['dataMin - 0.2', 'dataMax + 0.2']} stroke={colors.textSub} fontSize={12} tickLine={false} />
                                         <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}` }} />
                                         <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                        
+
                                         <Area type="monotone" dataKey="thickness" name="Final Film Profile (Radial)" stroke={colors.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorThickness)" />
                                     </AreaChart>
+                                ) : (
+                                    <LineChart data={sweepData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={colors.border} />
+                                        <XAxis dataKey="rpm" stroke={colors.textSub} fontSize={12} tickLine={false} label={{ value: 'Rotation speed ω (RPM)', position: 'insideBottom', offset: -5 }} />
+                                        <YAxis domain={[0, 'auto']} stroke={colors.textSub} fontSize={12} tickLine={false} label={{ value: 'Final thickness hf (μm)', angle: -90, position: 'insideLeft' }} />
+                                        <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${colors.border}` }} />
+                                        <Legend iconType="plainline" wrapperStyle={{ paddingTop: '20px' }} />
+
+                                        <Line type="monotone" dataKey="hfThreshold" name="η-threshold (cumulative-budget)" stroke={colors.error} strokeWidth={3} dot={{ r: 4 }} />
+                                        <Line type="monotone" dataKey="hfBalance" name="Balance criterion (numerical)" stroke={colors.success} strokeWidth={3} dot={{ r: 4 }} />
+                                        <Line type="monotone" dataKey="hfAnalytic" name="Classical Meyerhofer  hf ∝ ω^(-2/3)" stroke={colors.textSub} strokeWidth={2} strokeDasharray="6 6" dot={false} />
+                                    </LineChart>
                                 )}
                             </ResponsiveContainer>
                         </div>
+
+                        {viewMode === 'spincurve' && (
+                            <div style={{ fontSize: '12px', color: colors.textSub, marginTop: '12px', lineHeight: '1.5' }}>
+                                η-threshold 기준(빨강)은 ω가 커질수록 hf가 증가(누적-증발 영역)하고, balance 기준(초록)은
+                                고전 Meyerhofer 점근선(회색 점선) hf ∝ ω<sup>-2/3</sup>를 회복합니다. 두 곡선은 freezing
+                                criterion의 차이만으로 갈라집니다. (검증용 스윕: edge off · 상수 E · 중심 두께 기준)
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* 파라미터 제어 패널 */}
                 <div style={{ backgroundColor: colors.card, padding: '24px', borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <h3 style={{ color: colors.textMain, fontSize: '16px', margin: 0 }}>Challenge Mode Controls</h3>
-                    
+
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                             <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Rotation Speed</label>
@@ -162,7 +208,7 @@ export default function SpinCoatingSimulator() {
                             <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Evaporation Rate</label>
                             <span style={{ fontSize: '14px', fontWeight: '700', color: colors.primary }}>{evapRate.toFixed(1)} μm/s</span>
                         </div>
-                        <input type="range" min="0.0" max="2.0" step="0.1" value={evapRate} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEvapRate(Number(e.target.value))} />
+                        <input type="range" min="0.0" max="2.0" step="0.01" value={evapRate} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEvapRate(Number(e.target.value))} />
                     </div>
 
                     {/* 💡 [추가 ④] 엣지 용매증기 억제 (Edge-Vapor Suppression) 제어 슬라이더 */}
