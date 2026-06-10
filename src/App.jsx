@@ -5,20 +5,17 @@ import { runRK4Simulation } from './simulationEngine';
 export default function SpinCoatingSimulator() {
     const [rpm, setRpm] = useState(3000);
     const [h0, setH0] = useState(20);
-    const [eta0, setEta0] = useState(0.02); // 💡 추가된 초기 점도 상태
+    const [eta0, setEta0] = useState(0.02);
     const [evapRate, setEvapRate] = useState(0.5);
     const [useRaoult, setUseRaoult] = useState(false);
-    const [edgeSuppress, setEdgeSuppress] = useState(0.5); // 💡 [추가 ①] 엣지 용매증기 억제 (0=무제어, 1=완전제어)
+    const [edgeSuppress, setEdgeSuppress] = useState(0.5);
 
-    // 탭 UI 상태 관리
     const [viewMode, setViewMode] = useState('temporal');
-
-    const [sweepData, setSweepData] = useState([]); // 💡 [NEW] Spin Curve(hf vs ω) 데이터
+    const [sweepData, setSweepData] = useState([]);
     const [plotData, setPlotData] = useState({ timeData: [], spatialData: [], uniformity: 0 });
     const [metrics, setMetrics] = useState({ finalH: 0, gelTime: 0, minH: 0 });
 
     useEffect(() => {
-        // 💡 [추가 ②] edgeSuppress를 6번째 인자로 전달 (gelMode는 기본 'threshold')
         const res = runRK4Simulation(rpm, h0, eta0, evapRate, useRaoult, edgeSuppress);
         setPlotData(res);
 
@@ -33,23 +30,20 @@ export default function SpinCoatingSimulator() {
                 minH: h_poly.toFixed(2)
             });
         }
-    }, [rpm, h0, eta0, evapRate, useRaoult, edgeSuppress]); // 💡 [추가 ③] 의존성 배열에 edgeSuppress 포함
+    }, [rpm, h0, eta0, evapRate, useRaoult, edgeSuppress]);
 
-    // 💡 [NEW] Spin-curve sweep: 두 freezing 기준 + 해석 ω^(-2/3) 기준선 (Spin Curve 탭에서만 계산)
     useEffect(() => {
         if (viewMode !== 'spincurve') return;
         const rpms = [1000, 2000, 3000, 4000, 5000];
         const rows = rpms.map(r => {
-            // 검증용 스윕은 무제어(edge off) + 상수 E(Raoult off)로 중심 두께만 비교
             const thr = runRK4Simulation(r, h0, eta0, evapRate, false, 0, 'threshold');
             const bal = runRK4Simulation(r, h0, eta0, evapRate, false, 0, 'balance');
             return {
                 rpm: r,
-                hfThreshold: thr.spatialData[0].thickness, // 중심(r=0) 두께 [µm]
+                hfThreshold: thr.spatialData[0].thickness,
                 hfBalance: bal.spatialData[0].thickness
             };
         });
-        // 해석 점근선 hf ∝ ω^(-2/3) 을 3000 RPM의 balance 값에 앵커
         const anchor = (rows.find(x => x.rpm === 3000) || rows[0]).hfBalance;
         rows.forEach(x => {
             x.hfAnalytic = parseFloat((anchor * Math.pow(x.rpm / 3000, -2 / 3)).toFixed(3));
@@ -62,7 +56,6 @@ export default function SpinCoatingSimulator() {
         primary: '#4f46e5', secondary: '#0ea5e9', accent: '#f59e0b', error: '#ef4444', success: '#10b981', border: '#e2e8f0'
     };
 
-    // 균일도 조건에 따른 색상 시각화 (+- 2% 이내면 초록색)
     const isUniform = plotData.uniformity <= 2.0;
 
     return (
@@ -79,7 +72,6 @@ export default function SpinCoatingSimulator() {
             <div style={{ display: 'grid', gridTemplateColumns: '2.8fr 1fr', gap: '24px', alignItems: 'start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-                    {/* 상단 4개 Metrics 패널 */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
                         <div style={{ backgroundColor: colors.card, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.border}` }}>
                             <div style={{ color: colors.textSub, fontSize: '12px', fontWeight: '600' }}>CENTER THICKNESS</div>
@@ -111,7 +103,6 @@ export default function SpinCoatingSimulator() {
                         </div>
                     </div>
 
-                    {/* 도메인 전환 탭 UI 및 차트 영역 */}
                     <div style={{ backgroundColor: colors.card, padding: '24px', borderRadius: '16px', border: `1px solid ${colors.border}` }}>
                         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: `2px solid ${colors.border}`, paddingBottom: '10px' }}>
                             <button onClick={() => setViewMode('temporal')} style={{ padding: '8px 16px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', border: 'none', background: 'transparent', color: viewMode === 'temporal' ? colors.primary : colors.textSub, borderBottom: viewMode === 'temporal' ? `3px solid ${colors.primary}` : 'none' }}>
@@ -182,7 +173,6 @@ export default function SpinCoatingSimulator() {
                     </div>
                 </div>
 
-                {/* 파라미터 제어 패널 */}
                 <div style={{ backgroundColor: colors.card, padding: '24px', borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <h3 style={{ color: colors.textMain, fontSize: '16px', margin: 0 }}>Challenge Mode Controls</h3>
 
@@ -194,7 +184,6 @@ export default function SpinCoatingSimulator() {
                         <input type="range" min="1000" max="5000" step="500" value={rpm} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setRpm(Number(e.target.value))} />
                     </div>
 
-                    {/* 💡 새로 추가된 초기 점도 (Initial Viscosity) 제어 슬라이더 구역 */}
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                             <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Initial Viscosity</label>
@@ -211,7 +200,6 @@ export default function SpinCoatingSimulator() {
                         <input type="range" min="0.0" max="2.0" step="0.01" value={evapRate} style={{ width: '100%', accentColor: colors.primary }} onChange={(e) => setEvapRate(Number(e.target.value))} />
                     </div>
 
-                    {/* 💡 [추가 ④] 엣지 용매증기 억제 (Edge-Vapor Suppression) 제어 슬라이더 */}
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                             <label style={{ fontSize: '14px', fontWeight: '600', color: colors.textSub }}>Edge-Vapor Suppression</label>
